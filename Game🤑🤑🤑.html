@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTA MINI FULL</title>
+<style>
+body{margin:0;background:#111;overflow:hidden}
+canvas{background:#6ab04c;display:block;margin:auto}
+
+/* NÚT ĐIỀU KHIỂN */
+.btn{
+ position:fixed;width:60px;height:60px;
+ background:rgba(0,0,0,.6);color:#fff;
+ font-size:22px;border-radius:50%;
+ text-align:center;line-height:60px;
+ user-select:none
+}
+#up{left:80px;bottom:110px}
+#down{left:80px;bottom:20px}
+#left{left:10px;bottom:65px}
+#right{left:150px;bottom:65px}
+#btnShoot{right:20px;bottom:65px;background:#f1c40f}
+#btnE{right:20px;bottom:140px;background:#e74c3c}
+
+/* WASTED */
+#wasted{
+ position:fixed;
+ top:50%;left:50%;
+ transform:translate(-50%,-50%);
+ font-size:64px;
+ color:red;
+ font-weight:bold;
+ display:none;
+}
+</style>
+</head>
+<body>
+
+<div id="wasted">WASTED</div>
+
+<canvas id="game" width="360" height="500"></canvas>
+
+<div class="btn" id="up">↑</div>
+<div class="btn" id="down">↓</div>
+<div class="btn" id="left">←</div>
+<div class="btn" id="right">→</div>
+<div class="btn" id="btnE">E</div>
+<div class="btn" id="btnShoot">🔫</div>
+
+<script>
+/* ================== SETUP ================== */
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const MAP_W=1200, MAP_H=1200;
+let cam={x:0,y:0};
+let gameOver=false;
+
+/* ================== PLAYER ================== */
+let player={
+ x:600,y:600,s:20,
+ hp:100,dir:"up",
+ inCar:false
+};
+
+/* ================== PLAYER CAR ================== */
+let playerCar={
+ x:player.x+50,
+ y:player.y,
+ w:50,h:30,
+ hp:6
+};
+
+/* ================== NPC CARS ================== */
+let npcCars=[];
+for(let i=0;i<5;i++){
+ npcCars.push({
+  x:Math.random()*MAP_W,
+  y:Math.random()*MAP_H,
+  w:45,h:25,
+  hp:3,
+  dx:Math.random()<.5?-2:2,
+  dy:Math.random()<.5?-2:2
+ });
+}
+
+/* ================== NPC WALK ================== */
+let npcs=[];
+for(let i=0;i<6;i++){
+ npcs.push({
+  x:Math.random()*MAP_W,
+  y:Math.random()*MAP_H,
+  s:18,
+  dx:Math.random()<.5?-1:1,
+  dy:Math.random()<.5?-1:1
+ });
+}
+
+/* ================== POLICE ================== */
+let police=[];
+let wanted=0;
+
+/* ================== BULLETS ================== */
+let bullets=[];
+
+/* ================== INPUT ================== */
+let move={up:false,down:false,left:false,right:false};
+
+function hold(btn,key){
+ btn.ontouchstart=()=>move[key]=true;
+ btn.ontouchend=()=>move[key]=false;
+ btn.ontouchcancel=()=>move[key]=false;
+}
+hold(up,"up");hold(down,"down");
+hold(left,"left");hold(right,"right");
+
+/* ================== CAMERA ================== */
+function world(x,y){
+ return {x:x-cam.x,y:y-cam.y};
+}
+
+/* ================== DRAW ================== */
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+
+ cam.x=Math.max(0,Math.min(player.x-canvas.width/2,MAP_W-canvas.width));
+ cam.y=Math.max(0,Math.min(player.y-canvas.height/2,MAP_H-canvas.height));
+
+ // MAP GRID
+ ctx.strokeStyle="#555";
+ for(let i=0;i<MAP_W;i+=100){
+  let p=world(i,0);
+  ctx.beginPath();ctx.moveTo(p.x,0);ctx.lineTo(p.x,canvas.height);ctx.stroke();
+ }
+ for(let i=0;i<MAP_H;i+=100){
+  let p=world(0,i);
+  ctx.beginPath();ctx.moveTo(0,p.y);ctx.lineTo(canvas.width,p.y);ctx.stroke();
+ }
+
+ // NPC CARS
+ ctx.fillStyle="orange";
+ npcCars.forEach(v=>{
+  let p=world(v.x,v.y);
+  ctx.fillRect(p.x,p.y,v.w,v.h);
+ });
+
+ // PLAYER CAR
+ let pc=world(playerCar.x,playerCar.y);
+ ctx.fillStyle="red";
+ ctx.fillRect(pc.x,pc.y,playerCar.w,playerCar.h);
+
+ // NPC WALK
+ ctx.fillStyle="purple";
+ npcs.forEach(n=>{
+  let p=world(n.x,n.y);
+  ctx.fillRect(p.x,p.y,n.s,n.s);
+ });
+
+ // POLICE
+ ctx.fillStyle="blue";
+ police.forEach(p=>{
+  let s=world(p.x,p.y);
+  ctx.fillRect(s.x,s.y,20,20);
+ });
+
+ // PLAYER
+ if(!player.inCar){
+  let p=world(player.x,player.y);
+  ctx.fillStyle="black";
+  ctx.fillRect(p.x,p.y,player.s,player.s);
+ }
+
+ // BULLETS
+ ctx.fillStyle="yellow";
+ bullets.forEach(b=>{
+  let p=world(b.x,b.y);
+  ctx.fillRect(p.x,p.y,6,6);
+ });
+
+ ctx.fillStyle="white";
+ ctx.fillText("HP: "+player.hp,10,20);
+ ctx.fillText("Stars: "+Math.min(wanted,5),10,40);
+}
+
+/* ================== UPDATE ================== */
+function update(){
+ if(gameOver) return;
+
+ let speed=player.inCar?5:3;
+
+ if(move.up){player.dir="up";player.inCar?playerCar.y-=speed:player.y-=speed}
+ if(move.down){player.dir="down";player.inCar?playerCar.y+=speed:player.y+=speed}
+ if(move.left){player.dir="left";player.inCar?playerCar.x-=speed:player.x-=speed}
+ if(move.right){player.dir="right";player.inCar?playerCar.x+=speed:player.x+=speed}
+
+ if(player.inCar){
+  player.x=playerCar.x+15;
+  player.y=playerCar.y+8;
+ }
+
+ // NPC WALK MOVE
+ npcs.forEach(n=>{
+  n.x+=n.dx;n.y+=n.dy;
+  if(n.x<0||n.x>MAP_W-n.s)n.dx*=-1;
+  if(n.y<0||n.y>MAP_H-n.s)n.dy*=-1;
+ });
+
+ // NPC CAR MOVE
+ npcCars.forEach(v=>{
+  v.x+=v.dx;v.y+=v.dy;
+  if(v.x<0||v.x>MAP_W-v.w)v.dx*=-1;
+  if(v.y<0||v.y>MAP_H-v.h)v.dy*=-1;
+ });
+
+ // POLICE SPAWN
+ while(police.length < Math.min(wanted,5)){
+  police.push({x:Math.random()*MAP_W,y:Math.random()*MAP_H,hp:3});
+ }
+
+ police.forEach(p=>{
+  p.x+=Math.sign(player.x-p.x)*2;
+  p.y+=Math.sign(player.y-p.y)*2;
+  if(p.x<player.x+20&&p.x+20>player.x&&
+     p.y<player.y+20&&p.y+20>player.y){
+     player.hp-=1;
+  }
+ });
+
+ // BULLETS
+ bullets.forEach(b=>{
+  b.x+=b.dx*8;b.y+=b.dy*8;
+
+  npcCars.forEach(v=>{
+   if(b.x<v.x+v.w&&b.x+6>v.x&&b.y<v.y+v.h&&b.y+6>v.y){
+    v.hp--;b.dead=true;wanted++;
+   }
+  });
+
+  police.forEach(p=>{
+   if(b.x<p.x+20&&b.x+6>p.x&&b.y<p.y+20&&b.y+6>p.y){
+    p.hp--;b.dead=true;wanted++;
+   }
+  });
+
+  if(b.x<0||b.y<0||b.x>MAP_W||b.y>MAP_H)b.dead=true;
+ });
+
+ npcCars=npcCars.filter(v=>v.hp>0);
+ police=police.filter(p=>p.hp>0);
+ bullets=bullets.filter(b=>!b.dead);
+
+ if(player.hp<=0){
+  gameOver=true;
+  document.getElementById("wasted").style.display="block";
+ }
+}
+
+/* ================== ACTION ================== */
+function shoot(){
+ if(gameOver) return;
+ let dx=0,dy=0;
+ if(player.dir=="up")dy=-1;
+ if(player.dir=="down")dy=1;
+ if(player.dir=="left")dx=-1;
+ if(player.dir=="right")dx=1;
+ bullets.push({x:player.x,y:player.y,dx,dy});
+ wanted++;
+}
+
+function enterExitCar(){
+ let near=
+  player.x<playerCar.x+playerCar.w &&
+  player.x+player.s>playerCar.x &&
+  player.y<playerCar.y+playerCar.h &&
+  player.y+player.s>playerCar.y;
+ if(near) player.inCar=!player.inCar;
+}
+
+btnShoot.ontouchstart=shoot;
+btnE.ontouchstart=enterExitCar;
+
+/* ================== LOOP ================== */
+function loop(){
+ update();draw();
+ requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>
